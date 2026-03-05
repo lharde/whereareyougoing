@@ -15,6 +15,7 @@ export default function HomePage() {
   const [country, setCountry] = useState("");
   const [university, setUniversity] = useState("");
   const [adminSecret, setAdminSecret] = useState("");
+  const [showAdminPanel, setShowAdminPanel] = useState(false);
   const [adminUnlocked, setAdminUnlocked] = useState(false);
   const [adminMessage, setAdminMessage] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -24,6 +25,19 @@ export default function HomePage() {
   const [message, setMessage] = useState<{ text: string; type: "error" | "success" } | null>(null);
 
   const total = useMemo(() => entries.length, [entries]);
+  const groupedEntries = useMemo(() => {
+    const groups = new Map<string, Entry[]>();
+    for (const entry of entries) {
+      if (!groups.has(entry.country)) {
+        groups.set(entry.country, []);
+      }
+      groups.get(entry.country)?.push(entry);
+    }
+    return Array.from(groups.entries()).map(([countryName, items]) => ({
+      countryName,
+      items
+    }));
+  }, [entries]);
 
   async function loadEntries() {
     setLoading(true);
@@ -184,63 +198,76 @@ export default function HomePage() {
       </section>
 
       <section className="card stack">
-        <strong>All destinations</strong>
+        <div className="row">
+          <strong>All destinations</strong>
+          <button type="button" className="adminToggleButton" onClick={() => setShowAdminPanel((v) => !v)}>
+            {showAdminPanel ? "Hide admin" : "Admin"}
+          </button>
+        </div>
+        {showAdminPanel ? (
+          <div className="adminPanel stack">
+            {!adminUnlocked ? (
+              <form onSubmit={onUnlockAdmin}>
+                <input
+                  value={adminSecret}
+                  onChange={(e) => setAdminSecret(e.target.value)}
+                  placeholder="Admin password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                />
+                <button type="submit" className="secondaryButton">
+                  Enable admin mode
+                </button>
+              </form>
+            ) : (
+              <div className="stack">
+                <p className="muted">Admin mode is active. Delete buttons are visible in the list.</p>
+                <button type="button" className="secondaryButton" onClick={onLockAdmin}>
+                  Disable admin mode
+                </button>
+              </div>
+            )}
+            {adminMessage ? <p className="muted">{adminMessage}</p> : null}
+          </div>
+        ) : null}
         {loading ? <p className="muted">Loading...</p> : null}
         {!loading && entries.length === 0 ? (
           <p className="muted">No entries yet. Be the first one.</p>
         ) : null}
-        {!loading && entries.length > 0 ? (
-          <ul>
-            {entries.map((entry) => (
-              <li key={entry.id}>
+        {!loading && entries.length > 0
+          ? groupedEntries.map((group) => (
+              <div key={group.countryName} className="countryGroup stack">
                 <div className="row">
-                  <strong>{entry.name}</strong>
-                  <span className="muted">{new Date(entry.createdAt).toLocaleDateString()}</span>
+                  <strong>{group.countryName}</strong>
+                  <span className="pill">{group.items.length}</span>
                 </div>
-                <div className="row">
-                  <div className="muted">
-                    {entry.country} - {entry.university}
-                  </div>
-                  {adminUnlocked ? (
-                    <button
-                      type="button"
-                      className="dangerButton"
-                      onClick={() => void onDeleteEntry(entry.id)}
-                      disabled={deletingId === entry.id}
-                    >
-                      {deletingId === entry.id ? "Deleting..." : "Delete"}
-                    </button>
-                  ) : null}
-                </div>
-              </li>
-            ))}
-          </ul>
-        ) : null}
-      </section>
-
-      <section className="card stack">
-        <strong>Admin</strong>
-        {!adminUnlocked ? (
-          <form onSubmit={onUnlockAdmin}>
-            <input
-              value={adminSecret}
-              onChange={(e) => setAdminSecret(e.target.value)}
-              placeholder="Admin password"
-              type="password"
-              autoComplete="current-password"
-              required
-            />
-            <button type="submit">Enable admin mode</button>
-          </form>
-        ) : (
-          <div className="stack">
-            <p className="muted">Admin mode is active. Delete buttons are visible in the list.</p>
-            <button type="button" className="secondaryButton" onClick={onLockAdmin}>
-              Disable admin mode
-            </button>
-          </div>
-        )}
-        {adminMessage ? <p className="muted">{adminMessage}</p> : null}
+                <ul>
+                  {group.items.map((entry) => (
+                    <li key={entry.id}>
+                      <div className="row">
+                        <strong>{entry.name}</strong>
+                        <span className="muted">{new Date(entry.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div className="row">
+                        <div className="muted">{entry.university}</div>
+                        {adminUnlocked ? (
+                          <button
+                            type="button"
+                            className="dangerButton"
+                            onClick={() => void onDeleteEntry(entry.id)}
+                            disabled={deletingId === entry.id}
+                          >
+                            {deletingId === entry.id ? "Deleting..." : "Delete"}
+                          </button>
+                        ) : null}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))
+          : null}
       </section>
     </main>
   );

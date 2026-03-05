@@ -81,10 +81,31 @@ button:disabled {
   background: #6f776f;
 }
 
+.adminToggleButton {
+  background: transparent;
+  color: #565656;
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.65rem;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.adminPanel {
+  border: 1px dashed var(--line);
+  border-radius: 10px;
+  padding: 0.8rem;
+  background: #fcfbf6;
+}
+
 .dangerButton {
   background: #8f2727;
   padding: 0.45rem 0.75rem;
   font-size: 0.9rem;
+}
+
+.countryGroup {
+  border-top: 1px solid var(--line);
+  padding-top: 0.8rem;
 }
 
 .row {
