@@ -12,6 +12,7 @@ type Entry = {
 
 const KEY = "semester_abroad_entries_v2";
 const KV_MISSING_ERROR = "Storage is not configured. Connect Vercel KV to this project.";
+const ADMIN_UNAUTHORIZED_ERROR = "Unauthorized.";
 
 function isKvConfigured() {
   return Boolean(process.env.KV_REST_API_URL && process.env.KV_REST_API_TOKEN);
@@ -25,20 +26,27 @@ function byCountry(a: Entry, b: Entry) {
   );
 }
 
+function normalizeEntries(raw: Array<Entry & { city?: string }>) {
+  return raw
+    .map((entry) => ({
+      ...entry,
+      country: entry.country ?? entry.city ?? ""
+    }))
+    .filter((entry) => entry.country);
+}
+
+async function getAllEntries() {
+  const raw = await kv.lrange<(Entry & { city?: string })>(KEY, 0, -1);
+  return normalizeEntries(raw);
+}
+
 export async function GET() {
   if (!isKvConfigured()) {
     return NextResponse.json({ error: KV_MISSING_ERROR }, { status: 500 });
   }
 
   try {
-    const raw = await kv.lrange<(Entry & { city?: string })>(KEY, 0, -1);
-    const entries = raw
-      .map((entry) => ({
-        ...entry,
-        country: entry.country ?? entry.city ?? ""
-      }))
-      .filter((entry) => entry.country)
-      .sort(byCountry);
+    const entries = (await getAllEntries()).sort(byCountry);
 
     return NextResponse.json({ entries });
   } catch {
@@ -74,5 +82,43 @@ export async function POST(request: Request) {
     return NextResponse.json({ entry }, { status: 201 });
   } catch {
     return NextResponse.json({ error: "Could not save entry. Please try again." }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  if (!isKvConfigured()) {
+    return NextResponse.json({ error: KV_MISSING_ERROR }, { status: 500 });
+  }
+
+  const adminSecret = process.env.ADMIN_SECRET;
+  const providedSecret = request.headers.get("x-admin-secret");
+
+  if (!adminSecret || !providedSecret || providedSecret !== adminSecret) {
+    return NextResponse.json({ error: ADMIN_UNAUTHORIZED_ERROR }, { status: 401 });
+  }
+
+  try {
+    const body = (await request.json()) as { id?: string };
+    const id = body.id?.trim() ?? "";
+
+    if (!id) {
+      return NextResponse.json({ error: "Entry id is required." }, { status: 400 });
+    }
+
+    const existing = await getAllEntries();
+    const next = existing.filter((entry) => entry.id !== id);
+
+    if (next.length === existing.length) {
+      return NextResponse.json({ error: "Entry not found." }, { status: 404 });
+    }
+
+    await kv.del(KEY);
+    if (next.length > 0) {
+      await kv.rpush(KEY, ...next);
+    }
+
+    return NextResponse.json({ deleted: true });
+  } catch {
+    return NextResponse.json({ error: "Could not delete entry." }, { status: 500 });
   }
 }

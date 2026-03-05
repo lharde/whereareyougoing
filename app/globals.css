@@ -77,6 +77,16 @@ button:disabled {
   cursor: not-allowed;
 }
 
+.secondaryButton {
+  background: #6f776f;
+}
+
+.dangerButton {
+  background: #8f2727;
+  padding: 0.45rem 0.75rem;
+  font-size: 0.9rem;
+}
+
 .row {
   display: flex;
   justify-content: space-between;

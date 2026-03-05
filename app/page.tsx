@@ -14,6 +14,10 @@ export default function HomePage() {
   const [name, setName] = useState("");
   const [country, setCountry] = useState("");
   const [university, setUniversity] = useState("");
+  const [adminSecret, setAdminSecret] = useState("");
+  const [adminUnlocked, setAdminUnlocked] = useState(false);
+  const [adminMessage, setAdminMessage] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -85,6 +89,57 @@ export default function HomePage() {
     }
   }
 
+  async function onUnlockAdmin(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!adminSecret.trim()) {
+      setAdminMessage("Enter admin password.");
+      return;
+    }
+
+    setAdminUnlocked(true);
+    setAdminMessage("Admin mode enabled.");
+  }
+
+  function onLockAdmin() {
+    setAdminUnlocked(false);
+    setAdminSecret("");
+    setAdminMessage("Admin mode disabled.");
+  }
+
+  async function onDeleteEntry(id: string) {
+    if (!adminUnlocked) {
+      setAdminMessage("Enable admin mode first.");
+      return;
+    }
+
+    setDeletingId(id);
+    setAdminMessage(null);
+
+    try {
+      const res = await fetch("/api/entries", {
+        method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-secret": adminSecret
+        },
+        body: JSON.stringify({ id })
+      });
+
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        throw new Error(data.error ?? "Could not delete entry.");
+      }
+
+      setAdminMessage("Entry deleted.");
+      await loadEntries();
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Could not delete entry.";
+      setAdminMessage(text);
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
   return (
     <main className="stack">
       <section className="stack">
@@ -142,13 +197,50 @@ export default function HomePage() {
                   <strong>{entry.name}</strong>
                   <span className="muted">{new Date(entry.createdAt).toLocaleDateString()}</span>
                 </div>
-                <div className="muted">
-                  {entry.country} - {entry.university}
+                <div className="row">
+                  <div className="muted">
+                    {entry.country} - {entry.university}
+                  </div>
+                  {adminUnlocked ? (
+                    <button
+                      type="button"
+                      className="dangerButton"
+                      onClick={() => void onDeleteEntry(entry.id)}
+                      disabled={deletingId === entry.id}
+                    >
+                      {deletingId === entry.id ? "Deleting..." : "Delete"}
+                    </button>
+                  ) : null}
                 </div>
               </li>
             ))}
           </ul>
         ) : null}
+      </section>
+
+      <section className="card stack">
+        <strong>Admin</strong>
+        {!adminUnlocked ? (
+          <form onSubmit={onUnlockAdmin}>
+            <input
+              value={adminSecret}
+              onChange={(e) => setAdminSecret(e.target.value)}
+              placeholder="Admin password"
+              type="password"
+              autoComplete="current-password"
+              required
+            />
+            <button type="submit">Enable admin mode</button>
+          </form>
+        ) : (
+          <div className="stack">
+            <p className="muted">Admin mode is active. Delete buttons are visible in the list.</p>
+            <button type="button" className="secondaryButton" onClick={onLockAdmin}>
+              Disable admin mode
+            </button>
+          </div>
+        )}
+        {adminMessage ? <p className="muted">{adminMessage}</p> : null}
       </section>
     </main>
   );
